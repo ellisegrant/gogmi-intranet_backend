@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { sequelize, testConnection } = require('./config/database');
 const User = require('./models/User');
+const Payslip = require('./models/Payslip'); // ✅ ADDED THIS
 require('dotenv').config();
 
 const app = express();
@@ -338,6 +339,161 @@ app.post('/api/verify-department', async (req, res) => {
 });
 
 // ============================================
+// ENDPOINT 7: CREATE PAYSLIP
+// Type: POST
+// URL: http://localhost:5000/api/payslips
+// Purpose: Create a new payslip for an employee
+// Required: employeeId, month, year, earnings, deductions
+// ============================================
+app.post('/api/payslips', async (req, res) => {
+  try {
+    const payslipData = req.body;
+    
+    // Check if payslip already exists for this employee, month, and year
+    const existingPayslip = await Payslip.findOne({
+      where: {
+        employeeId: payslipData.employeeId,
+        month: payslipData.month,
+        year: payslipData.year
+      }
+    });
+    
+    if (existingPayslip) {
+      return res.status(400).json({
+        success: false,
+        message: `Payslip already exists for ${payslipData.month} ${payslipData.year}`
+      });
+    }
+    
+    // Calculate totals
+    const totalEarnings = parseFloat(payslipData.basicSalaryAmount || 0) +
+                         parseFloat(payslipData.bonus || 0) +
+                         parseFloat(payslipData.otherAllowances || 0);
+    
+    const totalDeductions = parseFloat(payslipData.ssfEmployee || 0) +
+                           parseFloat(payslipData.incomeTax || 0) +
+                           parseFloat(payslipData.providentFund || 0) +
+                           parseFloat(payslipData.loans || 0) +
+                           parseFloat(payslipData.otherDeductions || 0);
+    
+    const netPay = totalEarnings - totalDeductions;
+    
+    // Generate reference number
+    const referenceNo = `PAY${payslipData.year}${(new Date().getMonth() + 1).toString().padStart(2, '0')}${Date.now()}`;
+    
+    // Create payslip
+    const payslip = await Payslip.create({
+      ...payslipData,
+      totalEarnings,
+      totalDeductions,
+      netPay,
+      referenceNo,
+      status: 'approved'
+    });
+    
+    res.status(201).json({
+      success: true,
+      message: 'Payslip created successfully',
+      payslip
+    });
+  } catch (error) {
+    console.error('Payslip creation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating payslip',
+      error: error.message
+    });
+  }
+});
+
+// ============================================
+// ENDPOINT 8: GET ALL PAYSLIPS (Admin)
+// Type: GET
+// URL: http://localhost:5000/api/payslips
+// Purpose: Get all payslips (for admin)
+// ============================================
+app.get('/api/payslips', async (req, res) => {
+  try {
+    const payslips = await Payslip.findAll({
+      order: [['year', 'DESC'], ['createdAt', 'DESC']]
+    });
+    
+    res.status(200).json({
+      success: true,
+      count: payslips.length,
+      payslips
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching payslips',
+      error: error.message
+    });
+  }
+});
+
+// ============================================
+// ENDPOINT 9: GET EMPLOYEE PAYSLIPS
+// Type: GET
+// URL: http://localhost:5000/api/payslips/employee/:employeeId
+// Purpose: Get all payslips for a specific employee
+// ============================================
+app.get('/api/payslips/employee/:employeeId', async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    
+    const payslips = await Payslip.findAll({
+      where: { employeeId },
+      order: [['year', 'DESC'], ['createdAt', 'DESC']]
+    });
+    
+    res.status(200).json({
+      success: true,
+      count: payslips.length,
+      payslips
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching payslips',
+      error: error.message
+    });
+  }
+});
+
+// ============================================
+// ENDPOINT 10: GET SINGLE PAYSLIP
+// Type: GET
+// URL: http://localhost:5000/api/payslips/:id
+// Purpose: Get a specific payslip by ID
+// ============================================
+app.get('/api/payslips/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const payslip = await Payslip.findByPk(id);
+    
+    if (!payslip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payslip not found'
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      payslip
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching payslip',
+      error: error.message
+    });
+  }
+});
+
+// ============================================
 // SERVER STARTUP FUNCTION
 // ============================================
 const startServer = async () => {
@@ -360,6 +516,10 @@ const startServer = async () => {
       console.log('   GET  http://localhost:' + PORT + '/api/users');
       console.log('   POST http://localhost:' + PORT + '/api/request-access');
       console.log('   POST http://localhost:' + PORT + '/api/verify-department');
+      console.log('   POST http://localhost:' + PORT + '/api/payslips');
+      console.log('   GET  http://localhost:' + PORT + '/api/payslips');
+      console.log('   GET  http://localhost:' + PORT + '/api/payslips/:id');
+      console.log('   GET  http://localhost:' + PORT + '/api/payslips/employee/:employeeId');
       console.log('');
     });
   } catch (error) {
