@@ -1,13 +1,48 @@
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const { sequelize, testConnection } = require('./config/database');
 const User = require('./models/User');
-const Payslip = require('./models/Payslip'); // ✅ ADDED THIS
+const Payslip = require('./models/Payslip');
+const CompanySettings = require('./models/CompanySettings');
 require('dotenv').config();
 
 const app = express();
 
-// Enable CORS (allow frontend to access backend)
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'logo-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 2 * 1024 * 1024 // 2MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    // Accept images only
+    if (!file.originalname.match(/\.(jpg|jpeg|png|gif|svg)$/)) {
+      return cb(new Error('Only image files are allowed!'), false);
+    }
+    cb(null, true);
+  }
+});
+
+// Enable CORS
 app.use(cors({
   origin: 'http://localhost:5173',
   credentials: true
@@ -15,9 +50,11 @@ app.use(cors({
 
 app.use(express.json());
 
+// Serve uploaded files statically
+app.use('/uploads', express.static('uploads'));
+
 // ============================================
 // DEPARTMENT IDS (Access Codes)
-// Store these securely in production
 // ============================================
 const DEPARTMENT_IDS = {
   'admin-finance': 'ADMIN2025',
@@ -28,9 +65,6 @@ const DEPARTMENT_IDS = {
 
 // ============================================
 // ENDPOINT 1: HOME / HEALTH CHECK
-// Type: GET
-// URL: http://localhost:5000/
-// Purpose: Check if server is running
 // ============================================
 app.get('/', (req, res) => {
   res.json({
@@ -42,18 +76,11 @@ app.get('/', (req, res) => {
 
 // ============================================
 // ENDPOINT 2: REGISTER NEW USER
-// Type: POST
-// URL: http://localhost:5000/api/register
-// Purpose: Create a new employee/user
-// Required: employeeId, username, password, name, department
-// Optional: email, position
 // ============================================
 app.post('/api/register', async (req, res) => {
   try {
-    // Get data from request
     const { employeeId, username, password, name, email, department, position } = req.body;
     
-    // Check if user already exists
     const existingUser = await User.findOne({
       where: { employeeId }
     });
@@ -65,7 +92,6 @@ app.post('/api/register', async (req, res) => {
       });
     }
     
-    // Create new user (password will be automatically hashed by the model)
     const newUser = await User.create({
       employeeId,
       username,
@@ -98,17 +124,11 @@ app.post('/api/register', async (req, res) => {
 
 // ============================================
 // ENDPOINT 3: LOGIN USER
-// Type: POST
-// URL: http://localhost:5000/api/login
-// Purpose: Authenticate user and return user data
-// Required: username, password
 // ============================================
 app.post('/api/login', async (req, res) => {
   try {
-    // Get username and password from request
     const { username, password } = req.body;
     
-    // Check if username and password provided
     if (!username || !password) {
       return res.status(400).json({
         success: false,
@@ -116,12 +136,10 @@ app.post('/api/login', async (req, res) => {
       });
     }
     
-    // Find user by username
     const user = await User.findOne({
       where: { username }
     });
     
-    // Check if user exists
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -129,7 +147,6 @@ app.post('/api/login', async (req, res) => {
       });
     }
     
-    // Check if password matches using bcrypt
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({
@@ -138,7 +155,6 @@ app.post('/api/login', async (req, res) => {
       });
     }
     
-    // Success! Send back user data
     res.status(200).json({
       success: true,
       message: 'Login successful!',
@@ -163,14 +179,9 @@ app.post('/api/login', async (req, res) => {
 
 // ============================================
 // ENDPOINT 4: GET ALL USERS
-// Type: GET
-// URL: http://localhost:5000/api/users
-// Purpose: Retrieve list of all employees
-// Note: Password is excluded for security
 // ============================================
 app.get('/api/users', async (req, res) => {
   try {
-    // Get all users from database (exclude password!)
     const users = await User.findAll({
       attributes: ['id', 'employeeId', 'username', 'name', 'email', 'department', 'position', 'createdAt']
     });
@@ -190,17 +201,12 @@ app.get('/api/users', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINT 5: REQUEST ACCESS (Auto-create account for company emails)
-// Type: POST
-// URL: http://localhost:5000/api/request-access
-// Purpose: Auto-create account for @gogmi.org.gh emails
-// Required: email, username, name
+// ENDPOINT 5: REQUEST ACCESS
 // ============================================
 app.post('/api/request-access', async (req, res) => {
   try {
     const { email, username, name, department } = req.body;
 
-    // Validate required fields
     if (!email || !username || !name) {
       return res.status(400).json({
         success: false,
@@ -208,7 +214,6 @@ app.post('/api/request-access', async (req, res) => {
       });
     }
 
-    // Check if email is from company domain
     if (!email.endsWith('@gogmi.org.gh')) {
       return res.status(400).json({
         success: false,
@@ -216,7 +221,6 @@ app.post('/api/request-access', async (req, res) => {
       });
     }
 
-    // Check if email already exists
     const existingEmail = await User.findOne({ where: { email } });
     if (existingEmail) {
       return res.status(400).json({
@@ -225,7 +229,6 @@ app.post('/api/request-access', async (req, res) => {
       });
     }
 
-    // Check if username already exists
     const existingUsername = await User.findOne({ where: { username } });
     if (existingUsername) {
       return res.status(400).json({
@@ -234,7 +237,6 @@ app.post('/api/request-access', async (req, res) => {
       });
     }
 
-    // Auto-generate Employee ID
     const lastUser = await User.findOne({
       order: [['createdAt', 'DESC']],
       attributes: ['employeeId']
@@ -249,10 +251,8 @@ app.post('/api/request-access', async (req, res) => {
       newEmployeeId = 'EMP-GEN-001';
     }
 
-    // Generate temporary password
     const tempPassword = 'Welcome2025!';
 
-    // Create user account
     const newUser = await User.create({
       employeeId: newEmployeeId,
       username,
@@ -263,7 +263,6 @@ app.post('/api/request-access', async (req, res) => {
       position: 'Employee'
     });
 
-    // Return credentials
     res.status(201).json({
       success: true,
       message: 'Account created successfully!',
@@ -293,10 +292,6 @@ app.post('/api/request-access', async (req, res) => {
 
 // ============================================
 // ENDPOINT 6: VERIFY DEPARTMENT ID
-// Type: POST
-// URL: http://localhost:5000/api/verify-department
-// Purpose: Check if Department ID is correct
-// Required: department, accessCode
 // ============================================
 app.post('/api/verify-department', async (req, res) => {
   try {
@@ -309,7 +304,6 @@ app.post('/api/verify-department', async (req, res) => {
       });
     }
 
-    // General department doesn't need verification
     if (department === 'general') {
       return res.status(200).json({
         success: true,
@@ -317,7 +311,6 @@ app.post('/api/verify-department', async (req, res) => {
       });
     }
 
-    // Check if access code is correct
     if (DEPARTMENT_IDS[department] === accessCode) {
       return res.status(200).json({
         success: true,
@@ -340,16 +333,11 @@ app.post('/api/verify-department', async (req, res) => {
 
 // ============================================
 // ENDPOINT 7: CREATE PAYSLIP
-// Type: POST
-// URL: http://localhost:5000/api/payslips
-// Purpose: Create a new payslip for an employee
-// Required: employeeId, month, year, earnings, deductions
 // ============================================
 app.post('/api/payslips', async (req, res) => {
   try {
     const payslipData = req.body;
     
-    // Check if payslip already exists for this employee, month, and year
     const existingPayslip = await Payslip.findOne({
       where: {
         employeeId: payslipData.employeeId,
@@ -365,7 +353,6 @@ app.post('/api/payslips', async (req, res) => {
       });
     }
     
-    // Calculate totals
     const totalEarnings = parseFloat(payslipData.basicSalaryAmount || 0) +
                          parseFloat(payslipData.bonus || 0) +
                          parseFloat(payslipData.otherAllowances || 0);
@@ -378,10 +365,8 @@ app.post('/api/payslips', async (req, res) => {
     
     const netPay = totalEarnings - totalDeductions;
     
-    // Generate reference number
     const referenceNo = `PAY${payslipData.year}${(new Date().getMonth() + 1).toString().padStart(2, '0')}${Date.now()}`;
     
-    // Create payslip
     const payslip = await Payslip.create({
       ...payslipData,
       totalEarnings,
@@ -407,10 +392,7 @@ app.post('/api/payslips', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINT 8: GET ALL PAYSLIPS (Admin)
-// Type: GET
-// URL: http://localhost:5000/api/payslips
-// Purpose: Get all payslips (for admin)
+// ENDPOINT 8: GET ALL PAYSLIPS
 // ============================================
 app.get('/api/payslips', async (req, res) => {
   try {
@@ -434,9 +416,6 @@ app.get('/api/payslips', async (req, res) => {
 
 // ============================================
 // ENDPOINT 9: GET EMPLOYEE PAYSLIPS
-// Type: GET
-// URL: http://localhost:5000/api/payslips/employee/:employeeId
-// Purpose: Get all payslips for a specific employee
 // ============================================
 app.get('/api/payslips/employee/:employeeId', async (req, res) => {
   try {
@@ -463,9 +442,6 @@ app.get('/api/payslips/employee/:employeeId', async (req, res) => {
 
 // ============================================
 // ENDPOINT 10: GET SINGLE PAYSLIP
-// Type: GET
-// URL: http://localhost:5000/api/payslips/:id
-// Purpose: Get a specific payslip by ID
 // ============================================
 app.get('/api/payslips/:id', async (req, res) => {
   try {
@@ -494,22 +470,154 @@ app.get('/api/payslips/:id', async (req, res) => {
 });
 
 // ============================================
+// ENDPOINT 11: UPLOAD COMPANY LOGO
+// ============================================
+app.post('/api/company-settings/upload-logo', upload.single('logo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded'
+      });
+    }
+
+    // Get or create company settings
+    let settings = await CompanySettings.findOne();
+    
+    // Delete old logo file if exists
+    if (settings && settings.logoPath) {
+      const oldPath = path.join(__dirname, settings.logoPath);
+      if (fs.existsSync(oldPath)) {
+        fs.unlinkSync(oldPath);
+      }
+    }
+
+    const logoPath = `uploads/${req.file.filename}`;
+    const logoUrl = `http://localhost:5000/${logoPath}`;
+
+    if (!settings) {
+      settings = await CompanySettings.create({
+        logoFilename: req.file.filename,
+        logoPath: logoPath
+      });
+    } else {
+      settings.logoFilename = req.file.filename;
+      settings.logoPath = logoPath;
+      await settings.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Logo uploaded successfully',
+      logoUrl: logoUrl,
+      logoPath: logoPath
+    });
+  } catch (error) {
+    console.error('Logo upload error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error uploading logo',
+      error: error.message
+    });
+  }
+});
+
+// ============================================
+// ENDPOINT 12: UPDATE COMPANY SETTINGS
+// ============================================
+app.put('/api/company-settings', async (req, res) => {
+  try {
+    const { companyName, companyAcronym, hrEmail, address, phone } = req.body;
+
+    let settings = await CompanySettings.findOne();
+
+    if (!settings) {
+      settings = await CompanySettings.create({
+        companyName,
+        companyAcronym,
+        hrEmail,
+        address,
+        phone
+      });
+    } else {
+      settings.companyName = companyName || settings.companyName;
+      settings.companyAcronym = companyAcronym || settings.companyAcronym;
+      settings.hrEmail = hrEmail || settings.hrEmail;
+      settings.address = address || settings.address;
+      settings.phone = phone || settings.phone;
+      await settings.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Company settings updated successfully',
+      settings
+    });
+  } catch (error) {
+    console.error('Settings update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating settings',
+      error: error.message
+    });
+  }
+});
+
+// ============================================
+// ENDPOINT 13: GET COMPANY SETTINGS
+// ============================================
+app.get('/api/company-settings', async (req, res) => {
+  try {
+    let settings = await CompanySettings.findOne();
+
+    if (!settings) {
+      // Create default settings if none exist
+      settings = await CompanySettings.create({
+        companyName: 'GULF OF GUINEA MARITIME INSTITUTE',
+        companyAcronym: 'GoGMI',
+        hrEmail: 'hr@gogmi.org.gh'
+      });
+    }
+
+    // Add full logo URL
+    const response = {
+      success: true,
+      settings: {
+        id: settings.id,
+        companyName: settings.companyName,
+        companyAcronym: settings.companyAcronym,
+        hrEmail: settings.hrEmail,
+        address: settings.address,
+        phone: settings.phone,
+        logoUrl: settings.logoPath ? `http://localhost:5000/${settings.logoPath}` : null,
+        logoPath: settings.logoPath
+      }
+    };
+
+    res.status(200).json(response);
+  } catch (error) {
+    console.error('Get settings error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching settings',
+      error: error.message
+    });
+  }
+});
+
+// ============================================
 // SERVER STARTUP FUNCTION
 // ============================================
 const startServer = async () => {
   try {
-    // Test database connection
     await testConnection();
-    
-    // Create tables if they don't exist
     await sequelize.sync();
-    console.log('✅ Database tables created!');
+    console.log(' Database tables created!');
     
-    // Start server
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
-      console.log('\n📋 Available Endpoints:');
+      console.log(`Server running on http://localhost:${PORT}`);
+      console.log('\n Available Endpoints:');
       console.log('   GET  http://localhost:' + PORT + '/');
       console.log('   POST http://localhost:' + PORT + '/api/register');
       console.log('   POST http://localhost:' + PORT + '/api/login');
@@ -520,12 +628,14 @@ const startServer = async () => {
       console.log('   GET  http://localhost:' + PORT + '/api/payslips');
       console.log('   GET  http://localhost:' + PORT + '/api/payslips/:id');
       console.log('   GET  http://localhost:' + PORT + '/api/payslips/employee/:employeeId');
+      console.log('   POST http://localhost:' + PORT + '/api/company-settings/upload-logo');
+      console.log('   PUT  http://localhost:' + PORT + '/api/company-settings');
+      console.log('   GET  http://localhost:' + PORT + '/api/company-settings');
       console.log('');
     });
   } catch (error) {
-    console.error('❌ Error starting server:', error.message);
+    console.error(' Error starting server:', error.message);
   }
 };
 
-// Start the server
 startServer();
