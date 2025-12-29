@@ -7,6 +7,7 @@ const { sequelize, testConnection } = require('./config/database');
 const User = require('./models/User');
 const Payslip = require('./models/Payslip');
 const CompanySettings = require('./models/CompanySettings');
+const Announcement = require('./models/Announcement');
 require('dotenv').config();
 
 const app = express();
@@ -605,6 +606,212 @@ app.get('/api/company-settings', async (req, res) => {
   }
 });
 
+
+
+
+
+
+// ENDPOINT 14: CREATE ANNOUNCEMENT
+
+app.post('/api/announcements', async (req, res) => {
+  try {
+    const { title, content, category, priority, author, authorId, expiryDate } = req.body;
+
+    if (!title || !content || !author || !authorId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Title, content, author, and authorId are required'
+      });
+    }
+
+    const announcement = await Announcement.create({
+      title,
+      content,
+      category: category || 'General',
+      priority: priority || 'Medium',
+      author,
+      authorId,
+      expiryDate: expiryDate || null,
+      isActive: true
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Announcement created successfully',
+      announcement
+    });
+  } catch (error) {
+    console.error('Create announcement error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating announcement',
+      error: error.message
+    });
+  }
+});
+
+// ============================================
+// ENDPOINT 15: GET ACTIVE ANNOUNCEMENTS (for all users)
+// ============================================
+app.get('/api/announcements', async (req, res) => {
+  try {
+    const announcements = await Announcement.findAll({
+      where: { isActive: true },
+      order: [
+        ['priority', 'ASC'], // High priority first
+        ['createdAt', 'DESC']
+      ]
+    });
+
+    // Filter out expired announcements
+    const activeAnnouncements = announcements.filter(announcement => {
+      if (!announcement.expiryDate) return true;
+      return new Date(announcement.expiryDate) > new Date();
+    });
+
+    res.status(200).json({
+      success: true,
+      count: activeAnnouncements.length,
+      announcements: activeAnnouncements
+    });
+  } catch (error) {
+    console.error('Get announcements error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching announcements',
+      error: error.message
+    });
+  }
+});
+
+// ============================================
+// ENDPOINT 16: GET ALL ANNOUNCEMENTS (admin only - includes inactive)
+// ============================================
+app.get('/api/announcements/all', async (req, res) => {
+  try {
+    const announcements = await Announcement.findAll({
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.status(200).json({
+      success: true,
+      count: announcements.length,
+      announcements
+    });
+  } catch (error) {
+    console.error('Get all announcements error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching announcements',
+      error: error.message
+    });
+  }
+});
+
+
+// ENDPOINT 17: GET SINGLE ANNOUNCEMENT
+
+app.get('/api/announcements/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const announcement = await Announcement.findByPk(id);
+    
+    if (!announcement) {
+      return res.status(404).json({
+        success: false,
+        message: 'Announcement not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      announcement
+    });
+  } catch (error) {
+    console.error('Get announcement error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching announcement',
+      error: error.message
+    });
+  }
+});
+
+
+// ENDPOINT 18: UPDATE ANNOUNCEMENT
+
+app.put('/api/announcements/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, content, category, priority, isActive, expiryDate } = req.body;
+
+    const announcement = await Announcement.findByPk(id);
+
+    if (!announcement) {
+      return res.status(404).json({
+        success: false,
+        message: 'Announcement not found'
+      });
+    }
+
+    // Update fields
+    if (title) announcement.title = title;
+    if (content) announcement.content = content;
+    if (category) announcement.category = category;
+    if (priority) announcement.priority = priority;
+    if (typeof isActive !== 'undefined') announcement.isActive = isActive;
+    if (expiryDate !== undefined) announcement.expiryDate = expiryDate;
+
+    await announcement.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Announcement updated successfully',
+      announcement
+    });
+  } catch (error) {
+    console.error('Update announcement error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating announcement',
+      error: error.message
+    });
+  }
+});
+
+// ENDPOINT 19: DELETE ANNOUNCEMENT
+
+app.delete('/api/announcements/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const announcement = await Announcement.findByPk(id);
+
+    if (!announcement) {
+      return res.status(404).json({
+        success: false,
+        message: 'Announcement not found'
+      });
+    }
+
+    await announcement.destroy();
+
+    res.status(200).json({
+      success: true,
+      message: 'Announcement deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete announcement error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting announcement',
+      error: error.message
+    });
+  }
+});
+
+
 // ============================================
 // SERVER STARTUP FUNCTION
 // ============================================
@@ -631,6 +838,13 @@ const startServer = async () => {
       console.log('   POST http://localhost:' + PORT + '/api/company-settings/upload-logo');
       console.log('   PUT  http://localhost:' + PORT + '/api/company-settings');
       console.log('   GET  http://localhost:' + PORT + '/api/company-settings');
+      
+      console.log('   POST http://localhost:' + PORT + '/api/announcements');
+      console.log('   GET  http://localhost:' + PORT + '/api/announcements');
+      console.log('   GET  http://localhost:' + PORT + '/api/announcements/all');
+      console.log('   GET  http://localhost:' + PORT + '/api/announcements/:id');
+      console.log('   PUT  http://localhost:' + PORT + '/api/announcements/:id');
+      console.log('   DELETE http://localhost:' + PORT + '/api/announcements/:id');
       console.log('');
     });
   } catch (error) {
