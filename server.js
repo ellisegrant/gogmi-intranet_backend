@@ -14,6 +14,7 @@ const announcementRoutes = require('./routes/announcementRoutes');
 const leaveRoutes = require('./routes/leaveRoutes');
 const payslipRoutes = require('./routes/payslipRoutes');
 const companyRoutes = require('./routes/companyRoutes');
+const assetRoutes = require('./routes/assetRoutes');
 
 // ============================================
 // IMPORT MIDDLEWARE
@@ -36,6 +37,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/api/assets', assetRoutes);
 
 // ============================================
 // ROUTES
