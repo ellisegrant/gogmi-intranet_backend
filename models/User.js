@@ -13,7 +13,11 @@ const User = sequelize.define('User', {
     unique: true,
     allowNull: false
   },
-  username: {
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  email: {
     type: DataTypes.STRING,
     unique: true,
     allowNull: false
@@ -22,15 +26,6 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: false
   },
-  name: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  email: {
-    type: DataTypes.STRING,
-    unique: true,
-    allowNull: true
-  },
   department: {
     type: DataTypes.STRING,
     allowNull: false
@@ -38,30 +33,63 @@ const User = sequelize.define('User', {
   position: {
     type: DataTypes.STRING,
     allowNull: true
+  },
+  location: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: 'Accra'
+  },
+  employeeType: {
+    type: DataTypes.ENUM('Full-time', 'Contract'),
+    allowNull: false,
+    defaultValue: 'Full-time'
+  },
+  contractEndDate: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  resetPasswordToken: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  resetPasswordExpires: {
+    type: DataTypes.DATE,
+    allowNull: true
   }
 }, {
-  timestamps: true,
-  hooks: {
-    // This runs BEFORE creating a user
-    beforeCreate: async (user) => {
-      if (user.password) {
-        // Hash the password
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(user.password, salt);
-      }
-    },
-    // This runs BEFORE updating a user
-    beforeUpdate: async (user) => {
-      if (user.changed('password')) {
-        // Hash the new password
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(user.password, salt);
-      }
-    }
-  }
+  tableName: 'users',
+  timestamps: true
 });
 
-// Method to compare passwords
+User.generateEmployeeId = async function(employeeType) {
+  try {
+    const typeCode = employeeType === 'Full-time' ? 'F' : 'C';
+    
+    const lastEmployee = await User.findOne({
+      where: {
+        employeeType: employeeType,
+        employeeId: {
+          [sequelize.Sequelize.Op.like]: `GoGMI2010${typeCode}%`
+        }
+      },
+      order: [['employeeId', 'DESC']]
+    });
+
+    if (!lastEmployee) {
+      return `GoGMI2010${typeCode}001`;
+    }
+
+    const lastNumber = parseInt(lastEmployee.employeeId.slice(-3));
+    const nextNumber = lastNumber + 1;
+    const formattedNumber = String(nextNumber).padStart(3, '0');
+
+    return `GoGMI2010${typeCode}${formattedNumber}`;
+  } catch (error) {
+    console.error('Error generating employee ID:', error);
+    throw error;
+  }
+};
+
 User.prototype.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };

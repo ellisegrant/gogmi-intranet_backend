@@ -2,19 +2,28 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 
-// POST /api/register
-router.post('/register', authController.register);
+// POST /api/admin/register - Admin registration by Corporate Affairs
+router.post('/admin/register', authController.adminRegister);
 
 // POST /api/login
 router.post('/login', authController.login);
 
-// POST /api/request-access
+// POST /api/forgot-password
+router.post('/forgot-password', authController.forgotPassword);
+
+// POST /api/reset-password/:token
+router.post('/reset-password/:token', authController.resetPassword);
+
+// POST /api/request-access - Public access request
 router.post('/request-access', authController.requestAccess);
 
 // POST /api/verify-department
 router.post('/verify-department', authController.verifyDepartment);
 
-// GET /api/users
+// GET /api/users - Get all users
 router.get('/users', authController.getAllUsers);
+
+// GET /api/users/:id - Get single user
+router.get('/users/:id', authController.getUserById);
 
 module.exports = router;
