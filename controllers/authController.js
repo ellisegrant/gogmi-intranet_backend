@@ -5,12 +5,25 @@ const crypto = require('crypto');
 // ADMIN REGISTRATION (Corporate Affairs only)
 exports.adminRegister = async (req, res) => {
   try {
-    const { name, email, password, department, position, location, employeeType, contractEndDate } = req.body;
+    const { 
+      name, 
+      email, 
+      password, 
+      department, 
+      position, 
+      location, 
+      employeeType, 
+      contractEndDate,
+      employeeId,
+      phoneNumber,
+      lineManager,
+      costCentre
+    } = req.body;
 
-    if (!name || !email || !password || !department || !employeeType) {
+    if (!name || !email || !password || !department || !employeeType || !employeeId) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide all required fields'
+        message: 'Please provide all required fields (name, email, password, department, employeeType, employeeId)'
       });
     }
 
@@ -29,7 +42,13 @@ exports.adminRegister = async (req, res) => {
       });
     }
 
-    const employeeId = await User.generateEmployeeId(employeeType);
+    const existingEmployeeId = await User.findOne({ where: { employeeId } });
+    if (existingEmployeeId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Employee ID already exists'
+      });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -42,7 +61,10 @@ exports.adminRegister = async (req, res) => {
       position: position || 'Employee',
       location: location || 'Accra',
       employeeType,
-      contractEndDate: employeeType === 'Contract' ? contractEndDate : null
+      contractEndDate: employeeType === 'Contract' ? contractEndDate : null,
+      phoneNumber: phoneNumber || null,
+      lineManager: lineManager || null,
+      costCentre: costCentre || null
     });
 
     res.status(201).json({
@@ -56,7 +78,10 @@ exports.adminRegister = async (req, res) => {
         department: user.department,
         position: user.position,
         employeeType: user.employeeType,
-        contractEndDate: user.contractEndDate
+        contractEndDate: user.contractEndDate,
+        phoneNumber: user.phoneNumber,
+        lineManager: user.lineManager,
+        costCentre: user.costCentre
       }
     });
   } catch (error) {

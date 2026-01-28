@@ -48,6 +48,18 @@ const User = sequelize.define('User', {
     type: DataTypes.DATE,
     allowNull: true
   },
+  phoneNumber: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  lineManager: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  costCentre: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
   resetPasswordToken: {
     type: DataTypes.STRING,
     allowNull: true
