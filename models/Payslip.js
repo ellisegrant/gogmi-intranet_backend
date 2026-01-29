@@ -218,6 +218,7 @@ const Payslip = sequelize.define('Payslip', {
     unique: true
   }
 }, {
+tableName: 'payslips',	
   timestamps: true,
   indexes: [
     {

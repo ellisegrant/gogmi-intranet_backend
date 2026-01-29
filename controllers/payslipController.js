@@ -3,35 +3,95 @@ const Payslip = require('../models/Payslip');
 // ============================================
 // CREATE PAYSLIP
 // ============================================
+
 exports.create = async (req, res) => {
   try {
     const {
       employeeId,
-      employeeName,
       month,
       year,
-      basicSalary,
-      allowances,
-      deductions,
-      netSalary
+      staffNo,
+      employeeName,
+      department,
+      position,
+      costCentre,
+      region,
+      band,
+      annualSalary,
+      basicSalaryHrs,
+      basicSalaryAmount,
+      bonus,
+      otherAllowances,
+      employerSSF,
+      totalSSF,
+      employerPF,
+      totalPF,
+      ssfEmployee,
+      incomeTax,
+      providentFund,
+      loans,
+      otherDeductions,
+      bankName,
+      accountNumber,
+      psfNo,
+      taxableBenefits
     } = req.body;
 
-    if (!employeeId || !employeeName || !month || !year || basicSalary === undefined) {
+    // Validate required fields
+    if (!employeeId || !employeeName || !month || !year || !basicSalaryAmount) {
       return res.status(400).json({
         success: false,
         message: 'Employee ID, name, month, year, and basic salary are required'
       });
     }
 
+    // Calculate totals
+    const totalEarnings = 
+      parseFloat(basicSalaryAmount || 0) + 
+      parseFloat(bonus || 0) + 
+      parseFloat(otherAllowances || 0);
+
+    const totalDeductions = 
+      parseFloat(ssfEmployee || 0) + 
+      parseFloat(incomeTax || 0) + 
+      parseFloat(providentFund || 0) + 
+      parseFloat(loans || 0) + 
+      parseFloat(otherDeductions || 0);
+
+    const netPay = totalEarnings - totalDeductions;
+
     const payslip = await Payslip.create({
       employeeId,
-      employeeName,
       month,
       year,
-      basicSalary,
-      allowances: allowances || {},
-      deductions: deductions || {},
-      netSalary: netSalary || basicSalary
+      staffNo: staffNo || employeeId,
+      employeeName,
+      department,
+      position,
+      costCentre,
+      region,
+      band,
+      annualSalary,
+      basicSalaryHrs,
+      basicSalaryAmount,
+      bonus,
+      otherAllowances,
+      employerSSF,
+      totalSSF,
+      employerPF,
+      totalPF,
+      ssfEmployee,
+      incomeTax,
+      providentFund,
+      loans,
+      otherDeductions,
+      bankName,
+      accountNumber,
+      psfNo,
+      taxableBenefits,
+      totalEarnings,
+      totalDeductions,
+      netPay
     });
 
     res.status(201).json({
@@ -48,6 +108,10 @@ exports.create = async (req, res) => {
     });
   }
 };
+
+
+
+
 
 // ============================================
 // GET ALL PAYSLIPS
