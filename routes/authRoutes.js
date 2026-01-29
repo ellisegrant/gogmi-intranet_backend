@@ -26,4 +26,10 @@ router.get('/users', authController.getAllUsers);
 // GET /api/users/:id - Get single user
 router.get('/users/:id', authController.getUserById);
 
+// PUT /api/profile - Update user profile
+router.put("/profile", authController.updateProfile);
+
+// POST /api/profile/picture - Upload profile picture
+router.post("/profile/picture", authController.uploadProfilePicture);
+
 module.exports = router;
