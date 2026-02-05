@@ -336,7 +336,7 @@ exports.verifyDepartment = async (req, res) => {
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await User.findAll({
-      attributes: ['id', 'employeeId', 'name', 'email', 'department', 'position', 'employeeType', 'contractEndDate', 'createdAt'],
+      attributes: ['id', 'employeeId', 'name', 'email', 'department', 'position', 'employeeType', 'contractEndDate', 'costCentre', 'band', 'createdAt'],
       order: [['employeeId', 'ASC']]
     });
 
