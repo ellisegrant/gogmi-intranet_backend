@@ -1,7 +1,7 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-
+const { Op } = require('sequelize');
 // ADMIN REGISTRATION (Corporate Affairs only)
 exports.adminRegister = async (req, res) => {
   try {
@@ -122,11 +122,24 @@ exports.login = async (req, res) => {
       });
     }
 
+
+// Fetch line manager details if exists
+    let lineManagerName = null;
+    if (user.lineManagerId) {
+      const lineManager = await User.findOne({
+        where: { employeeId: user.lineManagerId },
+        attributes: ['name']
+      });
+      if (lineManager) {
+        lineManagerName = lineManager.name;
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: 'Login successful',
       user: {
-        id: user.id,
+          id: user.id,
         employeeId: user.employeeId,
         name: user.name,
         email: user.email,
@@ -134,7 +147,13 @@ exports.login = async (req, res) => {
         position: user.position,
         location: user.location,
         employeeType: user.employeeType,
-        contractEndDate: user.contractEndDate
+        contractEndDate: user.contractEndDate,
+        lineManagerId: user.lineManagerId,
+        lineManager: lineManagerName,
+        profilePicture: user.profilePicture,
+        dateOfBirth: user.dateOfBirth,
+        joinDate: user.joinDate,
+        phoneNumber: user.phoneNumber
       }
     });
   } catch (error) {
@@ -494,4 +513,105 @@ exports.uploadProfilePicture = (req, res) => {
       });
     }
   });
+};
+
+// GET UPCOMING BIRTHDAYS
+exports.getUpcomingBirthdays = async (req, res) => {
+  try {
+    const { period = 'month' } = req.query; // 'week' or 'month'
+    
+    const users = await User.findAll({
+      attributes: ['name', 'dateOfBirth'],
+      where: {
+        dateOfBirth: {
+          [Op.not]: null
+        }
+      }
+    });
+
+    const today = new Date();
+    const upcomingBirthdays = users.filter(user => {
+      const dob = new Date(user.dateOfBirth);
+      const thisYearBirthday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
+      
+      const daysUntil = Math.ceil((thisYearBirthday - today) / (1000 * 60 * 60 * 24));
+      
+      if (period === 'week') {
+        return daysUntil >= 0 && daysUntil <= 7;
+      } else {
+        return daysUntil >= 0 && daysUntil <= 30;
+      }
+    }).map(user => {
+      const dob = new Date(user.dateOfBirth);
+      const thisYearBirthday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
+      
+      return {
+        name: user.name,
+        date: thisYearBirthday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        avatar: user.name.split(' ').map(n => n[0]).join('').substring(0, 2)
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      birthdays: upcomingBirthdays
+    });
+  } catch (error) {
+    console.error('Get birthdays error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching birthdays',
+      error: error.message
+    });
+  }
+};
+
+// GET WORK ANNIVERSARIES
+exports.getWorkAnniversaries = async (req, res) => {
+  try {
+    const { period = 'month' } = req.query;
+    
+    const users = await User.findAll({
+      attributes: ['name', 'joinDate'],
+      where: {
+        joinDate: {
+          [Op.not]: null
+        }
+      }
+    });
+
+    const today = new Date();
+    const anniversaries = users.filter(user => {
+      const joinDate = new Date(user.joinDate);
+      const thisYearAnniversary = new Date(today.getFullYear(), joinDate.getMonth(), joinDate.getDate());
+      
+      const daysUntil = Math.ceil((thisYearAnniversary - today) / (1000 * 60 * 60 * 24));
+      
+      if (period === 'week') {
+        return daysUntil >= 0 && daysUntil <= 7;
+      } else {
+        return daysUntil >= 0 && daysUntil <= 30;
+      }
+    }).map(user => {
+      const joinDate = new Date(user.joinDate);
+      const years = today.getFullYear() - joinDate.getFullYear();
+      
+      return {
+        name: user.name,
+        date: `${joinDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (${years} year${years !== 1 ? 's' : ''})`
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      anniversaries
+    });
+  } catch (error) {
+    console.error('Get anniversaries error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching anniversaries',
+      error: error.message
+    });
+  }
 };

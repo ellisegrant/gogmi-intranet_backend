@@ -31,5 +31,12 @@ router.put("/profile", authController.updateProfile);
 
 // POST /api/profile/picture - Upload profile picture
 router.post("/profile/picture", authController.uploadProfilePicture);
+// GET /api/birthdays - Get upcoming birthdays
+router.get('/birthdays', authController.getUpcomingBirthdays);
+
+// GET /api/anniversaries - Get work anniversaries
+router.get('/anniversaries', authController.getWorkAnniversaries);
+
+
 
 module.exports = router;

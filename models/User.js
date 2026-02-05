@@ -52,10 +52,17 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: true
   },
-  lineManager: {
+ 
+  lineManagerId: {
     type: DataTypes.STRING,
-    allowNull: true
+    allowNull: true,
+    references: {
+      model: 'users',
+      key: 'employeeId'
+    }
   },
+ 
+
   costCentre: {
     type: DataTypes.STRING,
     allowNull: true
