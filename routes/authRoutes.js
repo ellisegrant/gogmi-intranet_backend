@@ -24,6 +24,9 @@ router.post('/verify-department', authController.verifyDepartment);
 router.get('/users', authController.getAllUsers);
 
 // GET /api/users/:id - Get single user
+
+// PUT /api/users/:id - Update user
+router.put('/users/:id', authController.updateUser);
 router.get('/users/:id', authController.getUserById);
 
 // PUT /api/profile - Update user profile
