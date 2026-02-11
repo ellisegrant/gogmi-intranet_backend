@@ -24,6 +24,10 @@ const Asset = sequelize.define('Asset', {
     type: DataTypes.TEXT,
     allowNull: true
   },
+  modelNumber: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
   serialNumber: {
     type: DataTypes.STRING,
     allowNull: true
@@ -53,7 +57,7 @@ const Asset = sequelize.define('Asset', {
     allowNull: true
   },
   status: {
-    type: DataTypes.ENUM('Active', 'Inactive', 'Under Maintenance', 'Disposed'),
+    type: DataTypes.ENUM('Active', 'Inactive', 'Under Maintenance', 'Disposed', 'Archived'),
     defaultValue: 'Active'
   },
   condition: {
@@ -62,6 +66,10 @@ const Asset = sequelize.define('Asset', {
   },
   warranty: {
     type: DataTypes.STRING,
+    allowNull: true
+  },
+  image: {
+    type: DataTypes.TEXT,
     allowNull: true
   },
   notes: {
@@ -92,7 +100,6 @@ Asset.generateNextAssetId = async function() {
 
     // Format with leading zeros (e.g., 6 -> "006")
     const formattedNumber = String(nextNumber).padStart(3, '0');
-
     return `AST-${formattedNumber}`;
   } catch (error) {
     console.error('Error generating asset ID:', error);

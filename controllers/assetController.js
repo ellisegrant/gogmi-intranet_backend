@@ -8,6 +8,7 @@ exports.create = async (req, res) => {
       name,
       category,
       description,
+      modelNumber,
       serialNumber,
       purchaseDate,
       purchasePrice,
@@ -18,6 +19,7 @@ exports.create = async (req, res) => {
       status,
       condition,
       warranty,
+      image,
       notes
     } = req.body;
 
@@ -36,6 +38,7 @@ exports.create = async (req, res) => {
       name,
       category,
       description,
+      modelNumber,
       serialNumber,
       purchaseDate,
       purchasePrice,
@@ -46,6 +49,7 @@ exports.create = async (req, res) => {
       status: status || 'Active',
       condition: condition || 'Good',
       warranty,
+      image,
       notes
     });
 
@@ -230,7 +234,7 @@ exports.update = async (req, res) => {
 };
 
 // Delete Asset
-exports.delete = async (req, res) => {
+exports.archive = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -243,17 +247,51 @@ exports.delete = async (req, res) => {
       });
     }
 
-    await asset.destroy();
+    // Update status to Archived instead of deleting
+    await asset.update({ status: 'Archived' });
 
     res.status(200).json({
       success: true,
-      message: 'Asset deleted successfully'
+      message: 'Asset archived successfully',
+      asset
     });
   } catch (error) {
-    console.error('Delete asset error:', error);
+    console.error('Archive asset error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error deleting asset',
+      message: 'Error archiving asset',
+      error: error.message
+    });
+  }
+};
+
+// Unarchive function
+exports.unarchive = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const asset = await Asset.findByPk(id);
+
+    if (!asset) {
+      return res.status(404).json({
+        success: false,
+        message: 'Asset not found'
+      });
+    }
+
+    // Update status back to Active
+    await asset.update({ status: 'Active' });
+
+    res.status(200).json({
+      success: true,
+      message: 'Asset unarchived successfully',
+      asset
+    });
+  } catch (error) {
+    console.error('Unarchive asset error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error unarchiving asset',
       error: error.message
     });
   }

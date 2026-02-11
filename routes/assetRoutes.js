@@ -23,7 +23,10 @@ router.get('/:id', assetController.getById);
 // PUT /api/assets/:id - Update asset (assetId cannot be changed)
 router.put('/:id', assetController.update);
 
-// DELETE /api/assets/:id - Delete asset
-router.delete('/:id', assetController.delete);
+// PUT /api/assets/:id/archive - Archive asset (replaces delete)
+router.put('/:id/archive', assetController.archive);
+
+// PUT /api/assets/:id/unarchive - Unarchive asset
+router.put('/:id/unarchive', assetController.unarchive);
 
 module.exports = router;
