@@ -189,36 +189,38 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    // Generate 6-digit code
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    user.resetPasswordToken = hashedToken;
+    user.resetPasswordToken = resetCode;
     user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
     await user.save();
 
-    // Create reset URL
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    // Send email via Microsoft Graph API
+    const fetch = require('node-fetch');
 
-    // Configure email transporter
-    const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD
-      },
-      tls: {
-        ciphers: 'SSLv3'
+    // Get access token
+    const tokenResponse = await fetch(
+      `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: process.env.AZURE_CLIENT_ID,
+          client_secret: process.env.AZURE_CLIENT_SECRET,
+          scope: 'https://graph.microsoft.com/.default',
+          grant_type: 'client_credentials'
+        })
       }
-    });
+    );
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
 
     // Email content
     const mailOptions = {
       from: process.env.EMAIL_FROM,
       to: user.email,
-      subject: 'Password Reset Request - GoGMI Intranet',
+      subject: 'Password Reset Code - GoGMI Intranet',
       html: `
         <!DOCTYPE html>
         <html>
@@ -228,43 +230,40 @@ exports.forgotPassword = async (req, res) => {
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background: linear-gradient(135deg, #132552 0%, #8e3400 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
             .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-            .button { display: inline-block; padding: 15px 30px; background: #8e3400; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
-            .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+            .code-box { background: white; border: 3px solid #8e3400; border-radius: 10px; padding: 30px; text-align: center; margin: 20px 0; }
+            .code { font-size: 48px; font-weight: bold; color: #8e3400; letter-spacing: 10px; font-family: 'Courier New', monospace; }
             .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
           </style>
         </head>
         <body>
           <div class="container">
             <div class="header">
-              <h1>Password Reset Request</h1>
+              <h1>��� Password Reset Code</h1>
             </div>
             <div class="content">
               <p>Hi <strong>${user.name}</strong>,</p>
-              
+
               <p>We received a request to reset your password for your GoGMI Intranet account.</p>
-              
-              <p>Click the button below to reset your password:</p>
-              
-              <center>
-                <a href="${resetUrl}" class="button">Reset Password</a>
-              </center>
-              
-              <p>Or copy and paste this link into your browser:</p>
-              <p style="word-break: break-all; color: #8e3400;">${resetUrl}</p>
-              
+
+              <p>Your password reset code is:</p>
+
+              <div class="code-box">
+                <div class="code">${resetCode}</div>
+              </div>
+
+              <p><strong>Enter this code on the password reset page to continue.</strong></p>
+
               <div class="warning">
-                <strong>⚠️ Important:</strong>
-                <ul>
-                  <li>This link will expire in 1 hour</li>
+                <p><strong>⚠️ Security Information:</strong></p>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                  <li>This code will expire in <strong>1 hour</strong></li>
+                  <li>Do not share this code with anyone</li>
                   <li>If you didn't request this reset, please ignore this email</li>
-                  <li>Your password will remain unchanged until you create a new one</li>
                 </ul>
               </div>
-              
-              <p>If you have any questions, please contact the IT department.</p>
-              
-              <p>Best regards,<br>
-              <strong>GoGMI Intranet Team</strong></p>
+
+              <p>If you're having trouble, contact IT support at <a href="mailto:info@gogmi.org.gh">info@gogmi.org.gh</a></p>
             </div>
             <div class="footer">
               <p>This is an automated message from GoGMI Intranet. Please do not reply to this email.</p>
@@ -276,56 +275,85 @@ exports.forgotPassword = async (req, res) => {
       `
     };
 
-    // Send email
-    await transporter.sendMail(mailOptions);
+    // Send email via Graph API
+    const emailBody = {
+      message: {
+        subject: mailOptions.subject,
+        body: { contentType: 'HTML', content: mailOptions.html },
+        toRecipients: [{ emailAddress: { address: user.email } }]
+      }
+    };
+
+    const sendResponse = await fetch(
+      `https://graph.microsoft.com/v1.0/users/${process.env.SEND_FROM_EMAIL}/sendMail`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(emailBody)
+      }
+    );
+
+    if (!sendResponse.ok) {
+      const err = await sendResponse.json();
+      throw new Error(err.error?.message || 'Failed to send email');
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Password reset link has been sent to your email'
+      message: 'Password reset code has been sent to your email'
     });
 
   } catch (error) {
     console.error('Forgot password error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error sending password reset email. Please try again later.',
+      message: 'Error sending password reset code. Please try again later.',
       error: error.message
     });
   }
 };
 
-// RESET PASSWORD
+// RESET PASSWORD WITH CODE
 exports.resetPassword = async (req, res) => {
   try {
-    const { token } = req.params;
-    const { password } = req.body;
+    const { code, newPassword } = req.body;
 
-    if (!password) {
+    if (!code || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide new password'
+        message: 'Please provide reset code and new password'
       });
     }
 
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-
+    // Find user with matching code that hasn't expired
     const user = await User.findOne({
       where: {
-        resetPasswordToken: hashedToken,
-        resetPasswordExpires: {
-          [require('sequelize').Op.gt]: Date.now()
-        }
+        resetPasswordToken: code,
       }
     });
 
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid or expired reset token'
+        message: 'Invalid or expired reset code'
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Check if code has expired
+    if (user.resetPasswordExpires < Date.now()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reset code has expired. Please request a new one.'
+      });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password and clear reset fields
     user.password = hashedPassword;
     user.resetPasswordToken = null;
     user.resetPasswordExpires = null;
@@ -333,13 +361,14 @@ exports.resetPassword = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Password reset successful'
+      message: 'Password has been reset successfully. You can now login with your new password.'
     });
+
   } catch (error) {
     console.error('Reset password error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error resetting password',
+      message: 'Error resetting password. Please try again later.',
       error: error.message
     });
   }

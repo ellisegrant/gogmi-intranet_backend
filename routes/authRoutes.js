@@ -12,7 +12,7 @@ router.post('/login', authController.login);
 router.post('/forgot-password', authController.forgotPassword);
 
 // POST /api/reset-password/:token
-router.post('/reset-password/:token', authController.resetPassword);
+router.post('/reset-password', authController.resetPassword);
 
 // POST /api/request-access - Public access request
 router.post('/request-access', authController.requestAccess);
